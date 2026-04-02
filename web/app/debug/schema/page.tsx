@@ -1,5 +1,7 @@
 import { getDb } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export default function SchemaPage() {
   const db = getDb();
 

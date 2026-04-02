@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { placeOrder } from "./actions";
 
+export const dynamic = "force-dynamic";
+
 export default async function PlaceOrderPage() {
   const cookieStore = await cookies();
   const customerId = cookieStore.get("customer_id")?.value;

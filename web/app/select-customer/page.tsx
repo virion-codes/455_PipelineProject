@@ -1,6 +1,8 @@
 import { getDb } from "@/lib/db";
 import SelectForm from "./SelectForm";
 
+export const dynamic = "force-dynamic";
+
 export default function SelectCustomerPage() {
   const db = getDb();
   const customers = db

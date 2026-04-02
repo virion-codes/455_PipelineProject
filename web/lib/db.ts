@@ -1,7 +1,8 @@
 import Database from "better-sqlite3";
 import path from "path";
 
-const DB_PATH = path.resolve(process.cwd(), "../data/shop.db");
+// shop.db lives next to the Next.js app (web/data) after repo restructure
+const DB_PATH = path.join(process.cwd(), "data", "shop.db");
 
 let _db: Database.Database | null = null;
 
