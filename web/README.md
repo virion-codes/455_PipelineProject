@@ -2,10 +2,27 @@
 
 ## 1. Create tables in Supabase
 
-The Cursor Supabase MCP may be **read-only**; apply DDL in the dashboard:
+Pick **one** of these.
+
+### A. SQL Editor (dashboard)
 
 1. Open [Supabase SQL Editor](https://supabase.com/dashboard) for your project.
-2. Paste and run the file **`../supabase/migrations/20260402140000_init_shop_schema.sql`**.
+2. Paste and run **`../supabase/migrations/20260402140000_init_shop_schema.sql`**.
+
+### B. Supabase CLI (matches dashboard “Run your first migration”)
+
+From the **repo root** (not `web/`):
+
+```bash
+npx supabase login
+npx supabase link --project-ref duwndvkeeeneaxlcvanm
+npx supabase db push
+```
+
+You **do not** need `supabase migration new new-migration` — this repo already has  
+`supabase/migrations/20260402140000_init_shop_schema.sql`. That command is only for adding a *new* empty migration file.
+
+`db push` applies every file under `supabase/migrations/` to the linked project.
 
 ## 2. Environment
 
