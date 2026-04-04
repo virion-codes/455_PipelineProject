@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const links = [
@@ -25,7 +25,7 @@ export default function Nav() {
 
   useEffect(() => {
     const name = getCookie("customer_name");
-    setCustomerName(name);
+    queueMicrotask(() => setCustomerName(name));
   }, [pathname]);
 
   return (

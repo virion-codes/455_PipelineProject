@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/db";
+import { getSql } from "@/lib/db";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -17,24 +17,16 @@ export default async function OrdersPage({
   const params = await searchParams;
   const justPlaced = params.placed === "1";
 
-  const db = getDb();
-  const orders = db
-    .prepare(
-      `SELECT o.order_id, o.order_datetime, o.order_total,
-              CASE WHEN s.shipment_id IS NOT NULL THEN 1 ELSE 0 END AS fulfilled,
-              COALESCE(s.late_delivery, -1) AS late_delivery
-       FROM orders o
-       LEFT JOIN shipments s ON s.order_id = o.order_id
-       WHERE o.customer_id = ?
-       ORDER BY o.order_datetime DESC`
-    )
-    .all(customerId) as {
-    order_id: number;
-    order_datetime: string;
-    order_total: number;
-    fulfilled: number;
-    late_delivery: number;
-  }[];
+  const sql = getSql();
+  const orders = await sql`
+    SELECT o.order_id, o.order_datetime, o.order_total,
+           CASE WHEN s.shipment_id IS NOT NULL THEN 1 ELSE 0 END AS fulfilled,
+           COALESCE(s.late_delivery, -1) AS late_delivery
+    FROM orders o
+    LEFT JOIN shipments s ON s.order_id = o.order_id
+    WHERE o.customer_id = ${customerId}
+    ORDER BY o.order_datetime DESC
+  `;
 
   return (
     <div>
@@ -78,9 +70,9 @@ export default async function OrdersPage({
                   </Link>
                 </td>
                 <td className="px-4 py-2 text-gray-500">
-                  {o.order_datetime.slice(0, 10)}
+                  {String(o.order_datetime).slice(0, 10)}
                 </td>
-                <td className="px-4 py-2">${o.order_total.toFixed(2)}</td>
+                <td className="px-4 py-2">${Number(o.order_total).toFixed(2)}</td>
                 <td className="px-4 py-2">
                   {o.fulfilled ? (
                     <span

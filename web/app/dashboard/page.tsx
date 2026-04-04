@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/db";
+import { getSql } from "@/lib/db";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -10,47 +10,30 @@ export default async function DashboardPage() {
   const customerId = cookieStore.get("customer_id")?.value;
   if (!customerId) redirect("/select-customer");
 
-  const db = getDb();
+  const sql = getSql();
 
-  const customer = db
-    .prepare("SELECT * FROM customers WHERE customer_id = ?")
-    .get(customerId) as {
-    customer_id: number;
-    full_name: string;
-    email: string;
-    city: string;
-    state: string;
-    loyalty_tier: string;
-    customer_segment: string;
-  } | undefined;
+  const [customer] = await sql`
+    SELECT * FROM customers WHERE customer_id = ${customerId}
+  `;
 
   if (!customer) redirect("/select-customer");
 
-  const stats = db
-    .prepare(
-      `SELECT COUNT(*) AS order_count, ROUND(SUM(order_total), 2) AS total_spend
-       FROM orders WHERE customer_id = ?`
-    )
-    .get(customerId) as { order_count: number; total_spend: number };
+  const [stats] = await sql`
+    SELECT COUNT(*)::int AS order_count,
+           COALESCE(ROUND(SUM(order_total)::numeric, 2), 0)::float AS total_spend
+    FROM orders WHERE customer_id = ${customerId}
+  `;
 
-  const recentOrders = db
-    .prepare(
-      `SELECT o.order_id, o.order_datetime, o.order_total,
-              COALESCE(s.late_delivery, -1) AS late_delivery,
-              CASE WHEN s.shipment_id IS NOT NULL THEN 1 ELSE 0 END AS fulfilled
-       FROM orders o
-       LEFT JOIN shipments s ON s.order_id = o.order_id
-       WHERE o.customer_id = ?
-       ORDER BY o.order_datetime DESC
-       LIMIT 5`
-    )
-    .all(customerId) as {
-    order_id: number;
-    order_datetime: string;
-    order_total: number;
-    late_delivery: number;
-    fulfilled: number;
-  }[];
+  const recentOrders = await sql`
+    SELECT o.order_id, o.order_datetime, o.order_total,
+           COALESCE(s.late_delivery, -1) AS late_delivery,
+           CASE WHEN s.shipment_id IS NOT NULL THEN 1 ELSE 0 END AS fulfilled
+    FROM orders o
+    LEFT JOIN shipments s ON s.order_id = o.order_id
+    WHERE o.customer_id = ${customerId}
+    ORDER BY o.order_datetime DESC
+    LIMIT 5
+  `;
 
   return (
     <div className="space-y-8">
@@ -67,7 +50,7 @@ export default async function DashboardPage() {
         <StatCard label="Total Orders" value={String(stats.order_count)} />
         <StatCard
           label="Total Spend"
-          value={`$${(stats.total_spend ?? 0).toFixed(2)}`}
+          value={`$${Number(stats.total_spend ?? 0).toFixed(2)}`}
         />
       </div>
 
@@ -97,12 +80,18 @@ export default async function DashboardPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-2 text-gray-500">
-                    {o.order_datetime.slice(0, 10)}
+                    {String(o.order_datetime).slice(0, 10)}
                   </td>
-                  <td className="px-4 py-2">${o.order_total.toFixed(2)}</td>
+                  <td className="px-4 py-2">${Number(o.order_total).toFixed(2)}</td>
                   <td className="px-4 py-2">
                     {o.fulfilled ? (
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${o.late_delivery === 1 ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          o.late_delivery === 1
+                            ? "bg-red-100 text-red-700"
+                            : "bg-green-100 text-green-700"
+                        }`}
+                      >
                         {o.late_delivery === 1 ? "Late" : "On time"}
                       </span>
                     ) : (

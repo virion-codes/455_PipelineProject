@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-interface Customer {
+export interface Customer {
   customer_id: number;
   full_name: string;
   email: string;

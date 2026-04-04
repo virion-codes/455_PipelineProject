@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/db";
+import { getSql } from "@/lib/db";
 import { cookies } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
@@ -15,67 +15,33 @@ export default async function OrderDetailPage({
   if (!customerId) redirect("/select-customer");
 
   const { id } = await params;
-  const db = getDb();
+  const sql = getSql();
 
-  const order = db
-    .prepare(
-      `SELECT o.*, c.full_name,
-              CASE WHEN s.shipment_id IS NOT NULL THEN 1 ELSE 0 END AS fulfilled,
-              COALESCE(s.late_delivery, -1) AS late_delivery,
-              s.carrier, s.shipping_method, s.actual_days, s.promised_days
-       FROM orders o
-       JOIN customers c ON c.customer_id = o.customer_id
-       LEFT JOIN shipments s ON s.order_id = o.order_id
-       WHERE o.order_id = ? AND o.customer_id = ?`
-    )
-    .get(id, customerId) as
-    | {
-        order_id: number;
-        order_datetime: string;
-        order_total: number;
-        order_subtotal: number;
-        shipping_fee: number;
-        tax_amount: number;
-        payment_method: string;
-        full_name: string;
-        fulfilled: number;
-        late_delivery: number;
-        carrier: string | null;
-        shipping_method: string | null;
-        actual_days: number | null;
-        promised_days: number | null;
-      }
-    | undefined;
+  const [order] = await sql`
+    SELECT o.*, c.full_name,
+           CASE WHEN s.shipment_id IS NOT NULL THEN 1 ELSE 0 END AS fulfilled,
+           COALESCE(s.late_delivery, -1) AS late_delivery,
+           s.carrier, s.shipping_method, s.actual_days, s.promised_days
+    FROM orders o
+    JOIN customers c ON c.customer_id = o.customer_id
+    LEFT JOIN shipments s ON s.order_id = o.order_id
+    WHERE o.order_id = ${id} AND o.customer_id = ${customerId}
+  `;
 
   if (!order) notFound();
 
-  const lineItems = db
-    .prepare(
-      `SELECT oi.quantity, oi.unit_price, oi.line_total, p.product_name, p.category
-       FROM order_items oi
-       JOIN products p ON p.product_id = oi.product_id
-       WHERE oi.order_id = ?`
-    )
-    .all(id) as {
-    quantity: number;
-    unit_price: number;
-    line_total: number;
-    product_name: string;
-    category: string;
-  }[];
+  const lineItems = await sql`
+    SELECT oi.quantity, oi.unit_price, oi.line_total, p.product_name, p.category
+    FROM order_items oi
+    JOIN products p ON p.product_id = oi.product_id
+    WHERE oi.order_id = ${id}
+  `;
 
-  const prediction = db
-    .prepare(
-      `SELECT late_delivery_probability, predicted_late_delivery, prediction_timestamp
-       FROM order_predictions WHERE order_id = ?`
-    )
-    .get(id) as
-    | {
-        late_delivery_probability: number;
-        predicted_late_delivery: number;
-        prediction_timestamp: string;
-      }
-    | undefined;
+  const [prediction] = await sql`
+    SELECT late_delivery_probability, predicted_late_delivery, prediction_timestamp
+    FROM order_predictions
+    WHERE order_id = ${id}
+  `;
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -108,7 +74,7 @@ export default async function OrderDetailPage({
         </div>
         <div>
           <div className="text-gray-500">Order Date</div>
-          <div className="font-medium">{order.order_datetime.slice(0, 10)}</div>
+          <div className="font-medium">{String(order.order_datetime).slice(0, 10)}</div>
         </div>
         <div>
           <div className="text-gray-500">Payment</div>
@@ -119,7 +85,7 @@ export default async function OrderDetailPage({
             <div className="text-gray-500">Carrier</div>
             <div className="font-medium">
               {order.carrier} · {order.shipping_method} · {order.actual_days}d
-              {order.promised_days && ` (promised ${order.promised_days}d)`}
+              {order.promised_days != null && ` (promised ${order.promised_days}d)`}
             </div>
           </div>
         )}
@@ -144,8 +110,8 @@ export default async function OrderDetailPage({
                   <div className="text-xs text-gray-400">{item.category}</div>
                 </td>
                 <td className="px-4 py-2">{item.quantity}</td>
-                <td className="px-4 py-2">${item.unit_price.toFixed(2)}</td>
-                <td className="px-4 py-2">${item.line_total.toFixed(2)}</td>
+                <td className="px-4 py-2">${Number(item.unit_price).toFixed(2)}</td>
+                <td className="px-4 py-2">${Number(item.line_total).toFixed(2)}</td>
               </tr>
             ))}
           </tbody>
@@ -155,19 +121,19 @@ export default async function OrderDetailPage({
       <div className="border border-gray-200 rounded p-4 text-sm space-y-1 bg-white">
         <div className="flex justify-between">
           <span className="text-gray-500">Subtotal</span>
-          <span>${order.order_subtotal.toFixed(2)}</span>
+          <span>${Number(order.order_subtotal).toFixed(2)}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-gray-500">Shipping</span>
-          <span>${order.shipping_fee.toFixed(2)}</span>
+          <span>${Number(order.shipping_fee).toFixed(2)}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-gray-500">Tax</span>
-          <span>${order.tax_amount.toFixed(2)}</span>
+          <span>${Number(order.tax_amount).toFixed(2)}</span>
         </div>
         <div className="flex justify-between font-semibold border-t border-gray-100 pt-1 mt-1">
           <span>Total</span>
-          <span>${order.order_total.toFixed(2)}</span>
+          <span>${Number(order.order_total).toFixed(2)}</span>
         </div>
       </div>
 
@@ -177,14 +143,17 @@ export default async function OrderDetailPage({
           <div className="text-blue-700 space-y-0.5">
             <div>
               Late delivery probability:{" "}
-              <strong>{(prediction.late_delivery_probability * 100).toFixed(1)}%</strong>
+              <strong>
+                {(Number(prediction.late_delivery_probability) * 100).toFixed(1)}%
+              </strong>
             </div>
             <div>
               Predicted:{" "}
               <strong>{prediction.predicted_late_delivery ? "Late" : "On time"}</strong>
             </div>
             <div className="text-xs text-blue-500 mt-1">
-              Scored at {prediction.prediction_timestamp.slice(0, 19).replace("T", " ")} UTC
+              Scored at{" "}
+              {String(prediction.prediction_timestamp).slice(0, 19).replace("T", " ")} UTC
             </div>
           </div>
         </div>

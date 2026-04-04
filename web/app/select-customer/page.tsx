@@ -1,15 +1,16 @@
-import { getDb } from "@/lib/db";
-import SelectForm from "./SelectForm";
+import { getSql } from "@/lib/db";
+import SelectForm, { type Customer } from "./SelectForm";
 
 export const dynamic = "force-dynamic";
 
-export default function SelectCustomerPage() {
-  const db = getDb();
-  const customers = db
-    .prepare(
-      "SELECT customer_id, full_name, email FROM customers WHERE is_active = 1 ORDER BY full_name"
-    )
-    .all() as { customer_id: number; full_name: string; email: string }[];
+export default async function SelectCustomerPage() {
+  const sql = getSql();
+  const customers = (await sql`
+    SELECT customer_id, full_name, email
+    FROM customers
+    WHERE is_active = 1
+    ORDER BY full_name
+  `) as Customer[];
 
   return (
     <div className="max-w-xl">

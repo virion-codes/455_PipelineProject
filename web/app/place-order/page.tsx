@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/db";
+import { getSql } from "@/lib/db";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { placeOrder } from "./actions";
@@ -10,12 +10,13 @@ export default async function PlaceOrderPage() {
   const customerId = cookieStore.get("customer_id")?.value;
   if (!customerId) redirect("/select-customer");
 
-  const db = getDb();
-  const products = db
-    .prepare(
-      "SELECT product_id, product_name, category, price FROM products WHERE is_active = 1 ORDER BY category, product_name"
-    )
-    .all() as { product_id: number; product_name: string; category: string; price: number }[];
+  const sql = getSql();
+  const products = await sql`
+    SELECT product_id, product_name, category, price
+    FROM products
+    WHERE is_active = 1
+    ORDER BY category, product_name
+  `;
 
   const categories = [...new Set(products.map((p) => p.category))].sort();
 
@@ -41,7 +42,7 @@ export default async function PlaceOrderPage() {
                   >
                     <div>
                       <div className="text-sm font-medium">{p.product_name}</div>
-                      <div className="text-xs text-gray-400">${p.price.toFixed(2)} each</div>
+                      <div className="text-xs text-gray-400">${Number(p.price).toFixed(2)} each</div>
                     </div>
                     <input
                       type="number"

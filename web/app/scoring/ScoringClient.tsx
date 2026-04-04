@@ -44,7 +44,7 @@ export default function ScoringClient() {
 
       {status === "running" && (
         <p className="text-sm text-gray-500 animate-pulse">
-          Executing <code>jobs/run_inference.py</code>…
+          Running scoring (local Python or SCORING_WEBHOOK_URL on Vercel)…
         </p>
       )}
 
@@ -86,8 +86,9 @@ export default function ScoringClient() {
             </pre>
           )}
           <p className="text-xs text-red-600 mt-1">
-            Make sure the pipeline has been trained and{" "}
-            <code>jobs/run_inference.py</code> exists.
+            Locally: <code>pip install -r jobs/requirements.txt</code>, set{" "}
+            <code>DATABASE_URL</code>, run <code>python3 jobs/run_inference.py</code> from repo
+            root. On Vercel use <code>SCORING_WEBHOOK_URL</code> or CI.
           </p>
         </div>
       )}

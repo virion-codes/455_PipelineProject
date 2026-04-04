@@ -1,43 +1,62 @@
 import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import path from "path";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 export async function POST() {
+  if (process.env.SCORING_WEBHOOK_URL) {
+    try {
+      const r = await fetch(process.env.SCORING_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const body = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+      return NextResponse.json({ success: r.ok, ...body }, { status: r.ok ? 200 : 502 });
+    } catch (e) {
+      return NextResponse.json({ success: false, error: String(e) }, { status: 500 });
+    }
+  }
+
+  if (process.env.VERCEL) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Scoring is not available inside Vercel serverless. Run jobs/run_inference.py with DATABASE_URL (e.g. GitHub Actions) or set SCORING_WEBHOOK_URL.",
+      },
+      { status: 503 }
+    );
+  }
+
   const projectRoot = path.resolve(process.cwd(), "..");
   const script = path.join(projectRoot, "jobs", "run_inference.py");
 
-  return new Promise<NextResponse>((resolve) => {
-    const cmd = `python "${script}"`;
-    exec(
-      cmd,
-      { cwd: projectRoot, timeout: 60000 },
-      (error, stdout, stderr) => {
-        if (error) {
-          resolve(
-            NextResponse.json(
-              {
-                success: false,
-                error: error.message,
-                stdout: stdout.trim(),
-                stderr: stderr.trim(),
-              },
-              { status: 500 }
-            )
-          );
-        } else {
-          // Try to parse a count from stdout, e.g. "Inference complete. Predictions written: 42"
-          const match = stdout.match(/(\d+)/);
-          const count = match ? parseInt(match[1]) : null;
-          resolve(
-            NextResponse.json({
-              success: true,
-              count,
-              stdout: stdout.trim(),
-              stderr: stderr.trim(),
-            })
-          );
-        }
-      }
+  try {
+    const { stdout, stderr } = await execAsync(`python3 "${script}"`, {
+      cwd: projectRoot,
+      timeout: 120_000,
+      env: { ...process.env },
+    });
+    const m = stdout.match(/Predictions written:\s*(\d+)/i);
+    const count = m ? parseInt(m[1], 10) : null;
+    return NextResponse.json({
+      success: true,
+      count,
+      stdout: stdout.trim(),
+      stderr: stderr.trim(),
+    });
+  } catch (err: unknown) {
+    const e = err as { message?: string; stdout?: string; stderr?: string };
+    return NextResponse.json(
+      {
+        success: false,
+        error: e.message ?? String(err),
+        stdout: e.stdout?.trim(),
+        stderr: e.stderr?.trim(),
+      },
+      { status: 500 }
     );
-  });
+  }
 }

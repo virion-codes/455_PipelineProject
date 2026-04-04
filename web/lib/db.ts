@@ -1,16 +1,23 @@
-import Database from "better-sqlite3";
-import path from "path";
+import postgres from "postgres";
 
-// shop.db lives next to the Next.js app (web/data) after repo restructure
-const DB_PATH = path.join(process.cwd(), "data", "shop.db");
+const globalForSql = globalThis as unknown as {
+  sql: ReturnType<typeof postgres> | undefined;
+};
 
-let _db: Database.Database | null = null;
-
-export function getDb(): Database.Database {
-  if (!_db) {
-    _db = new Database(DB_PATH, { readonly: false });
-    _db.pragma("journal_mode = WAL");
-    _db.pragma("foreign_keys = ON");
+/** Postgres via Supabase. On Vercel use the Transaction pooler connection string (port 6543). */
+export function getSql() {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "DATABASE_URL is not set. Add it in Vercel (Settings → Environment Variables) and in web/.env.local for local dev."
+    );
   }
-  return _db;
+  if (!globalForSql.sql) {
+    globalForSql.sql = postgres(url, {
+      max: 1,
+      idle_timeout: 20,
+      connect_timeout: 20,
+    });
+  }
+  return globalForSql.sql;
 }
